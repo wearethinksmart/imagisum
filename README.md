@@ -8,7 +8,53 @@
 Lorem Ipsum... but for photos. Photos from Unsplash and Lorem Picsum, downloadable or hotlinkable at any size.
 
 ## Setup
-Set `UNSPLASH_ACCESS_KEY` in `.env.local` (several keys may be comma-separated). Picsum needs no key.
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) 18.18 or later (20 LTS recommended)
+- [pnpm](https://pnpm.io/) 10 or later (`npm install -g pnpm`)
+- An Unsplash access key. Create an app at [unsplash.com/developers](https://unsplash.com/developers) to get one. Lorem Picsum needs no key.
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/siamahnaf/imagisum.git
+cd imagisum
+```
+
+### 2. Install dependencies
+```bash
+pnpm install
+```
+
+### 3. Configure environment variables
+Create a `.env.local` file in the project root:
+```bash
+UNSPLASH_ACCESS_KEY=your_unsplash_access_key
+
+# Optional: public URL used for metadata, sitemap and robots.txt
+# Defaults to https://imagisum.vercel.app
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+To spread requests across several keys, separate them with commas (`UNSPLASH_ACCESS_KEY=key1,key2`) or add suffixed variables such as `UNSPLASH_ACCESS_KEY_2`. When one key hits its rate limit, the next one is tried.
+
+### 4. Run the development server
+```bash
+pnpm dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 5. Build and run for production
+```bash
+pnpm build
+pnpm start
+```
+
+### Other scripts
+| Command | Description |
+| --- | --- |
+| `pnpm dev` | Start the dev server with Turbopack |
+| `pnpm build` | Create a production build |
+| `pnpm start` | Serve the production build |
+| `pnpm lint` | Run ESLint |
 
 ## Visit
 [https://imagisum.vercel.app/](https://imagisum.vercel.app/)
