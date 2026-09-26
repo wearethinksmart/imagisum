@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Design tokens — light only
+ * ------------------------------------------------------------------ */
+:root {
+    --bg: #ffffff;
+    --bg-subtle: #f6f6f8;
+    --bg-elevated: #ffffff;
+    --bg-inset: #f0f0f3;
+
+    --fg: #0b0b0f;
+    --fg-muted: #585b66;
+    --fg-subtle: #8b8f9a;
+
+    --border: #e7e7ec;
+    --border-strong: #d4d5dd;
+
+    --brand: #a21caf;
+    --brand-hover: #86198f;
+    --brand-soft: #fbf1fd;
+    --brand-fg: #ffffff;
+
+    --ring: #d946ef;
+    --overlay: 10 10 12;
+    color-scheme: light;
+}
+
+@theme inline {
+    /* Screens */
+    --breakpoint-xxs: 0px;
+    --breakpoint-xs: 360px;
+    --breakpoint-sm: 480px;
+    --breakpoint-msm: 540px;
+    --breakpoint-lsm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1024px;
+    --breakpoint-xl: 1280px;
+    --breakpoint-2xl: 1536px;
+
+    /* Colors */
+    --color-bg: var(--bg);
+    --color-bg-subtle: var(--bg-subtle);
+    --color-bg-elevated: var(--bg-elevated);
+    --color-bg-inset: var(--bg-inset);
+
+    --color-fg: var(--fg);
+    --color-fg-muted: var(--fg-muted);
+    --color-fg-subtle: var(--fg-subtle);
+
+    --color-border: var(--border);
+    --color-border-strong: var(--border-strong);
+
+    --color-brand: var(--brand);
+    --color-brand-hover: var(--brand-hover);
+    --color-brand-soft: var(--brand-soft);
+    --color-brand-fg: var(--brand-fg);
+
+    --color-ring: var(--ring);
+
+    /* ------------------------------------------------------------------ *
+     * Type scale — semantic sizes so UI chrome stays legible.
+     *
+     * Tailwind's `text-xs` (12px) had crept into labels, inputs and code
+     * blocks across the app, which reads poorly. Use
+     * these instead of raw t-shirt sizes for interface text:
+     *
+     *   text-meta   tertiary only — badges, counters, image dimensions
+     *   text-label  field labels, chips, tabs, helper text
+     *   text-code   monospace URLs and snippets
+     *   text-body   default copy inside panels and dialogs
+     * ------------------------------------------------------------------ */
+    --text-meta: 0.75rem;
+    --text-meta--line-height: 1.1rem;
+    --text-label: 0.8125rem;
+    --text-label--line-height: 1.15rem;
+    --text-code: 0.8125rem;
+    --text-code--line-height: 1.35rem;
+    --text-body: 0.9375rem;
+    --text-body--line-height: 1.5rem;
+
+    /* Motion */
+    --animate-fade-up: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    --animate-fade-in: fade-in 0.3s ease-out both;
+}
+
+@keyframes fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Base
+ * ------------------------------------------------------------------ */
+@layer base {
+    * {
+        border-color: var(--border);
+    }
+
+    html {
+        scroll-behavior: smooth;
+        -webkit-tap-highlight-color: transparent;
+
+        /* Keep the scrollbar's space reserved even while a dialog locks the
+           scroll. Without it the bar vanishes on open, the viewport grows by
+           its width, and everything measured against the viewport — the fixed
+           header, the dialog backdrop — jumps sideways just as the backdrop
+           fades in. Dialog.tsx still pads the body for browsers that lack it. */
+        scrollbar-gutter: stable;
+    }
+
+    body {
+        background-color: var(--bg);
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+        background-color: var(--brand);
+        color: var(--brand-fg);
+    }
+
+    button,
+    [role="button"] {
+        cursor: pointer;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+    }
+
+    /* Scrollbars */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-strong) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 9999px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * Utilities
+ * ------------------------------------------------------------------ */
+@utility no-scrollbar {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
