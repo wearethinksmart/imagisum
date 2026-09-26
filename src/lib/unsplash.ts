@@ -48,6 +48,9 @@ function collectKeys(): string[] {
     return keys;
 }
 
+export const RATE_LIMIT_MESSAGE =
+    "Unsplash's hourly request limit has been reached. Please try again in a little while — Picsum photos still work in the meantime.";
+
 /** Unsplash limits per hour, so a throttled key rests for one. */
 const cooldownUntil = new Map<string, number>();
 
@@ -131,7 +134,7 @@ async function send<T>(url: string, policy: CachePolicy): Promise<T> {
     if (!keys.length) throw new UnsplashError("No Unsplash key is configured (set UNSPLASH_ACCESS_KEY).", 500);
 
     const available = keys.filter(isUsable);
-    if (!available.length) throw new UnsplashError("Unsplash is rate limiting every key. Try again within the hour.", 429);
+    if (!available.length) throw new UnsplashError(RATE_LIMIT_MESSAGE, 429);
 
     for (const key of available) {
         const response = await fetch(url, {
@@ -152,7 +155,7 @@ async function send<T>(url: string, policy: CachePolicy): Promise<T> {
         throw new UnsplashError(`Unsplash request failed (${response.status}).`, response.status);
     }
 
-    throw new UnsplashError("Unsplash is rate limiting every key. Try again within the hour.", 429);
+    throw new UnsplashError(RATE_LIMIT_MESSAGE, 429);
 }
 
 interface RawPhoto {

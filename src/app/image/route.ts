@@ -1,6 +1,4 @@
 import { after, type NextRequest, NextResponse } from "next/server";
-import sharp from "sharp";
-
 import { getRandomPhoto } from "@/lib/photos";
 import { getPicsumInfo, picsumUrl } from "@/lib/picsum";
 import { getRawUrl, trackDownload, UnsplashError } from "@/lib/unsplash";
@@ -15,6 +13,7 @@ import {
     downloadName,
     FORMATS,
     isOffCentre,
+    outputFormat,
     type Format,
     type ImageTransform
 } from "@/lib/image-url";
@@ -74,20 +73,15 @@ class HttpError extends Error {
 
 function errorResponse(message: string, status: number) {
     // Failures must never be cached, or a blip gets pinned for a year.
-    return NextResponse.json({ error: message }, { status, headers: { ...CORS, ...cacheHeaders("none") } });
+    const headers: Record<string, string> = { ...CORS, ...cacheHeaders("none") };
+    // Unsplash quotas reset hourly; tell clients not to hammer us before then.
+    if (status === 429) headers["Retry-After"] = "600";
+    return NextResponse.json({ error: message }, { status, headers });
 }
 
-/**
- * Where the pixels come from: a URL that already serves the finished image,
- * or a larger one that still has to be cropped here.
- */
-type Upstream =
-    | { kind: "direct"; url: string }
-    | { kind: "crop"; url: string; left: number; top: number; width: number; height: number };
-
-async function unsplashUpstream(id: string, transform: ImageTransform): Promise<Upstream> {
+async function unsplashUpstream(id: string, transform: ImageTransform): Promise<string> {
     try {
-        return { kind: "direct", url: buildUnsplashUrl(await getRawUrl(id), transform) };
+        return buildUnsplashUrl(await getRawUrl(id), transform);
     } catch (error) {
         if (error instanceof UnsplashError) {
             if (error.status === 404) throw new HttpError("No photo with that id.", 404);
@@ -99,12 +93,13 @@ async function unsplashUpstream(id: string, transform: ImageTransform): Promise<
 
 /**
  * Picsum resizes and crops to the centre on its own, and serves JPEG or WebP.
- * Anything past that — an off-centre crop, PNG/AVIF, a quality setting — is
- * finished here with sharp, from a copy just big enough to cover the box.
+ * Anything past that — an off-centre crop, PNG, a quality setting — goes
+ * through wsrv.nl, an open-source image CDN, from a copy just big enough to
+ * cover the box. Nothing is processed on this server.
  */
-async function picsumUpstream(id: string, transform: ImageTransform): Promise<Upstream> {
+async function picsumUpstream(id: string, transform: ImageTransform): Promise<string> {
     let { width, height } = transform;
-    const format = transform.format ?? "jpg";
+    const format = outputFormat("picsum", transform.format);
     // Picsum's own effects: a bare `grayscale` flag, and blur on a 1–10 scale.
     const effects = [
         transform.grayscale && "grayscale",
@@ -116,7 +111,7 @@ async function picsumUpstream(id: string, transform: ImageTransform): Promise<Up
 
     // The common case — an exact box, centred — needs nothing but a redirect.
     if (width && height && nativeOutput && !isOffCentre(transform)) {
-        return { kind: "direct", url: picsumUrl(id, width, height) + suffix };
+        return picsumUrl(id, width, height) + suffix;
     }
 
     const info = await getPicsumInfo(id);
@@ -136,33 +131,33 @@ async function picsumUpstream(id: string, transform: ImageTransform): Promise<Up
     const h = height as number;
 
     if (nativeOutput && !isOffCentre(transform)) {
-        return { kind: "direct", url: picsumUrl(id, w, h) + suffix };
+        return picsumUrl(id, w, h) + suffix;
     }
 
-    // Scale the whole photo so it covers the box, then cut the box out of it.
+    // A copy that covers the box, so wsrv only has to cut the box out of it.
     const scale = Math.max(w / info.width, h / info.height);
     const coverW = Math.max(w, Math.ceil(info.width * scale));
     const coverH = Math.max(h, Math.ceil(info.height * scale));
     if (coverW > 10000 || coverH > 10000) throw new HttpError("That size is too extreme for this photo.", 400);
 
-    const centreX = clampFocal(transform.focalX ?? 0.5) * coverW;
-    const centreY = clampFocal(transform.focalY ?? 0.5) * coverH;
-
-    return {
-        kind: "crop",
+    const percent = (value: number | null | undefined) => Math.round(clampFocal(value ?? 0.5) * 100);
+    const params = new URLSearchParams({
         url: picsumUrl(id, coverW, coverH) + suffix,
-        left: Math.round(clamp(centreX - w / 2, 0, coverW - w)),
-        top: Math.round(clamp(centreY - h / 2, 0, coverH - h)),
-        width: w,
-        height: h
-    };
+        w: String(w),
+        h: String(h),
+        fit: "cover",
+        a: `focal-${percent(transform.focalX)}-${percent(transform.focalY)}`,
+        output: format,
+        q: String(transform.quality ?? DEFAULT_QUALITY)
+    });
+    return `https://wsrv.nl/?${params}`;
 }
 
 /** The finished bytes, fetched fresh — the response itself is what gets cached. */
-async function render(upstream: Upstream, transform: ImageTransform): Promise<{ body: BodyInit; type: string }> {
+async function render(url: string, format: Format | undefined): Promise<{ body: BodyInit; type: string }> {
     let response: Response;
     try {
-        response = await fetch(upstream.url, { cache: "no-store" });
+        response = await fetch(url, { cache: "no-store" });
     } catch {
         throw new HttpError("Could not reach the image CDN.", 502);
     }
@@ -170,21 +165,7 @@ async function render(upstream: Upstream, transform: ImageTransform): Promise<{ 
     if (response.status === 404) throw new HttpError("No photo with that id.", 404);
     if (!response.ok || !response.body) throw new HttpError("Could not fetch the image data.", 502);
 
-    if (upstream.kind === "direct") {
-        return { body: response.body, type: response.headers.get("content-type") ?? contentTypeFor(transform.format) };
-    }
-
-    const format = transform.format ?? "jpg";
-    const quality = transform.quality ?? DEFAULT_QUALITY;
-    const image = sharp(Buffer.from(await response.arrayBuffer())).extract({
-        left: upstream.left,
-        top: upstream.top,
-        width: upstream.width,
-        height: upstream.height
-    });
-
-    const output = await (format === "jpg" ? image.jpeg({ quality, mozjpeg: true }) : image.toFormat(format, { quality })).toBuffer();
-    return { body: new Uint8Array(output), type: contentTypeFor(format) };
+    return { body: response.body, type: response.headers.get("content-type") ?? contentTypeFor(format) };
 }
 
 async function serve(request: NextRequest) {
@@ -219,16 +200,17 @@ async function serve(request: NextRequest) {
 
         // A plain link just points the browser at the provider's CDN: nothing
         // flows through this server, and Unsplash asks for hotlinking anyway.
-        if (upstream.kind === "direct" && !download) {
-            headers.set("Location", upstream.url);
+        if (!download) {
+            headers.set("Location", upstream);
             return new NextResponse(null, { status: 302, headers });
         }
 
-        const { body, type } = await render(upstream, transform);
+        const format = outputFormat(parsed.source, transform.format);
+        const { body, type } = await render(upstream, format);
         headers.set("Content-Type", type);
 
         if (download) {
-            const name = downloadName({ id }, transform.width ?? null, transform.height ?? null, transform.format);
+            const name = downloadName({ id }, transform.width ?? null, transform.height ?? null, format);
             headers.set("Content-Disposition", `attachment; filename="${name}"`);
             if (parsed.source === "unsplash") after(() => trackDownload(parsed.raw));
         }
@@ -236,6 +218,7 @@ async function serve(request: NextRequest) {
         return new NextResponse(body, { headers });
     } catch (error) {
         if (error instanceof HttpError) return errorResponse(error.message, error.status);
+        console.error("/image failed", error);
         return errorResponse("The image could not be produced.", 500);
     }
 }

@@ -21,7 +21,7 @@ const params = [
     { name: "height", type: "16–6000", required: "Optional", body: "Output height in pixels. Alias: `h`." },
     { name: "fp-x", type: "0–1", required: "Optional", body: "Horizontal crop anchor, where 0 is the left edge. Applies when both sides are set." },
     { name: "fp-y", type: "0–1", required: "Optional", body: "Vertical crop anchor, where 0 is the top edge. Applies when both sides are set." },
-    { name: "format", type: "jpg | png | webp | avif", required: "Optional", body: "Output encoding. Defaults to jpg." },
+    { name: "format", type: "jpg | png | webp | avif", required: "Optional", body: "Output encoding. Defaults to jpg. Picsum photos serve webp in place of avif." },
     { name: "q", type: "1–100", required: "Optional", body: "Quality for lossy formats. Defaults to 80." },
     { name: "blur", type: "0–100", required: "Optional", body: "Blur, for background art and loading states." },
     { name: "grayscale", type: "0 | 1", required: "Optional", body: "Strips all colour." },

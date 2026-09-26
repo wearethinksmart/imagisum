@@ -1,3 +1,5 @@
+import type { PhotoSource } from "@/_types";
+
 export type Format = "jpg" | "png" | "webp" | "avif";
 
 export const FORMATS: Format[] = ["jpg", "png", "webp", "avif"];
@@ -111,6 +113,12 @@ export function buildUnsplashUrl(raw: string, transform: ImageTransform): string
     if (transform.grayscale) url.searchParams.set("sat", "-100");
 
     return url.toString();
+}
+
+/** The format actually served: wsrv.nl can't encode AVIF, so Picsum falls back to WebP. */
+export function outputFormat(source: PhotoSource, format: Format | undefined): Format {
+    if (source === "picsum" && format === "avif") return "webp";
+    return format ?? "jpg";
 }
 
 export function contentTypeFor(format: Format | undefined): string {
